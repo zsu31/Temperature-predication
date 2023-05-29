@@ -18,7 +18,7 @@ def emd_imf(signal):
     if isinstance(signal, list):
         signal = np.array(signal)
     assert isinstance(signal, np.ndarray)
-    IMFs = CEEMDAN().CEEMDAN(signal, np.arange(len(signal)))
+    IMFs = CEEMDAN().emd(signal, np.arange(len(signal)))
     res_dict = {}
     for _ in range(IMFs.shape[0]):
         res_dict[f'imf_{_}'] = IMFs[_].tolist()
