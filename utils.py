@@ -409,7 +409,7 @@ class TSAT_parameter():
             }
             self.training_parameters = {
                 'total_epochs': 5,
-                'batch_size': 64,
+                'batch_size': 32,
                 'loss_function': 'rmse',
                 'metric': 'rmse',
             }

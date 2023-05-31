@@ -9,7 +9,18 @@ import time
 import torch
 from torch.utils.data import DataLoader
 from utils import TSAT_parameter, loss_function, calculate_loss
+import torch.nn.functional as F
+from sklearn.metrics import mean_squared_error
 
+# 保存模型
+def save_model(model, path):
+    torch.save(model.state_dict(), path)
+    print("模型已保存至:", path)
+
+# 计算RMSE
+def calculate_rmse(y_true, y_pred):
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    return rmse
 
 
 class KOI_model_train_test_interface():
@@ -30,7 +41,7 @@ class KOI_model_train_test_interface():
     def import_dataset(self, dataset) -> None:
         # import the dataset
         train_valid_split_ratio = 0.2
-        num_workers = 20 # 4
+        num_workers = 4 # 4
         train_valid_dataset, self.test_dataset = train_test_split(dataset, test_size=train_valid_split_ratio, shuffle=True)  # False
         self.train_dataset, self.valid_dataset = train_test_split(train_valid_dataset, test_size=train_valid_split_ratio)
         # Data Loader
@@ -74,6 +85,7 @@ class KOI_model_train_test_interface():
                 )
             loss = calculate_loss(y_true_normalization, y_pred_normalization, self.train_params['loss_function'], self.criterion, self.train_params['device'])
         # save model
+        save_model(self.TSAT_model, 'path_to_save_model')
         end_time = time.time()
         print(f'TSAT train complete! Training time: {end_time-start_time}')
     
@@ -83,7 +95,6 @@ class KOI_model_train_test_interface():
         # load model and no_grad
         end_time = time.time()
         print(f'TSAT test complete! Testing time: {end_time-start_time}')
-
 
 
 if __name__ == '__main__':
@@ -106,14 +117,8 @@ if __name__ == '__main__':
         n_lookforward_days=48, 
         adj_mat_method='correlation', 
         use_tqdm=True
-        )
-    # data_graph, data_label = generate_ETTm1_data(
-    #     n_lookback_days=720, 
-    #     n_lookforward_days=48, 
-    #     adj_mat_method='zero_mat', 
-    #     use_tqdm=True
-    #     )
-
+    )
+    
     dataset = construct_TSAT_dataset(data_graph, data_label, normalization_require=True)
     total_metrics = defaultdict(list)
 
@@ -123,3 +128,41 @@ if __name__ == '__main__':
     model_interface.import_dataset(dataset=dataset)
     model_interface.train_model()
     model_interface.test_model()
+
+    # 测试数据集
+    num_workers = 4
+    test_loader = DataLoader(dataset=model_interface.test_dataset, batch_size=train_params['batch_size'], 
+                         collate_fn=graph_collate_func_TSAT_normalization_require, shuffle=False, 
+                         num_workers=num_workers, pin_memory=False)
+
+
+    # 测试模型
+    model_interface.TSAT_model.eval()
+    predictions = []
+    targets = []
+
+    with torch.no_grad():
+        for batch in test_loader:
+            graph_name_list, adjacency_matrix, node_features, imf_1_matrices, imf_2_matrices, imf_3_matrices, imf_4_matrices, imf_5_matrices, y_true_normalization, _, _ = batch
+            adjacency_matrix = adjacency_matrix.to(train_params['device'])
+            node_features = node_features.to(train_params['device'])
+            imf_1_matrices = imf_1_matrices.to(train_params['device'])
+            imf_2_matrices = imf_2_matrices.to(train_params['device'])
+            imf_3_matrices = imf_3_matrices.to(train_params['device'])
+            imf_4_matrices = imf_4_matrices.to(train_params['device'])
+            imf_5_matrices = imf_5_matrices.to(train_params['device'])
+            y_true_normalization = y_true_normalization.to(train_params['device'])
+            batch_mask = torch.sum(torch.abs(node_features), dim=-1) != 0
+
+            y_pred_normalization = model_interface.TSAT_model(
+                node_features, batch_mask, adjacency_matrix, imf_1_matrices, imf_2_matrices, imf_3_matrices, imf_4_matrices, imf_5_matrices
+            )
+            predictions.append(y_pred_normalization.cpu().numpy())
+            targets.append(y_true_normalization.cpu().numpy())
+
+    predictions = np.concatenate(predictions, axis=0)
+    targets = np.concatenate(targets, axis=0)
+
+    # 计算RMSE
+    rmse = calculate_rmse(targets, predictions)
+    print("测试集RMSE:", rmse)
