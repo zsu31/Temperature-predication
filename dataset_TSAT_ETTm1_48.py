@@ -199,4 +199,3 @@ if __name__ == '__main__':
     # generate ETTm1_48 datas
     graph_data, graph_label = generate_ETTm1_data(args.lb, args.lf, args.adj_mat_method, bool(args.use_tqdm))
 
-# from Public_version.dataset_TSAT_ETTm1_48 import generate_ETTm1_data

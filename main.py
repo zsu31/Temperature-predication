@@ -15,6 +15,12 @@ from utils import TSAT_parameter, loss_function, calculate_loss
 class KOI_model_train_test_interface():
     def __init__(self, TSAT_model, model_params:dict, train_params:dict) -> None:
         self.TSAT_model = TSAT_model
+
+        # 如果有多个GPU，使用DataParallel
+        if torch.cuda.device_count() > 1:
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            self.TSAT_model = torch.nn.DataParallel(self.TSAT_model)
+
         self.TSAT_model = self.TSAT_model.to(train_params['device'])    # send the model to GPU
         self.train_params = train_params
         self.model_params = model_params
